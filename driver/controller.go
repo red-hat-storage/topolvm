@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/topolvm/topolvm"
+	v1 "github.com/topolvm/topolvm/api/v1"
 	"github.com/topolvm/topolvm/csi"
 	"github.com/topolvm/topolvm/driver/k8s"
 	"google.golang.org/grpc/codes"
@@ -44,9 +45,12 @@ func (s controllerService) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		"content_source", source,
 		"accessibility_requirements", req.GetAccessibilityRequirements().String())
 
-	if source != nil {
-		return nil, status.Error(codes.InvalidArgument, "volume_content_source not supported")
-	}
+	var (
+		parentID  string
+		parentVol *v1.LogicalVolume
+		err       error
+	)
+
 	if capabilities == nil {
 		return nil, status.Error(codes.InvalidArgument, "no volume capabilities are provided")
 	}
@@ -79,6 +83,21 @@ func (s controllerService) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	requestGb, err := convertRequestCapacity(req.GetCapacityRange().GetRequiredBytes(), req.GetCapacityRange().GetLimitBytes())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	// check if the create volume request has a data source
+	if source != nil {
+		// get the parent volumeID/snapshotID if exists
+		parentVol, parentID, err = s.validateContentSource(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		// check if the child volume has the same size as the parent volume.
+		// TODO (Yuggupta27): Allow user to create a child volume with more size than that of the parent.
+		parentSizeGb := parentVol.Spec.Size.Value() >> 30
+		if parentSizeGb != requestGb {
+			return nil, status.Error(codes.InvalidArgument, "requested size does not match parent size")
+		}
 	}
 
 	// process topology
@@ -127,8 +146,12 @@ func (s controllerService) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	name = strings.ToLower(name)
-
-	volumeID, err := s.lvService.CreateVolume(ctx, node, deviceClass, name, requestGb)
+	// If a volume has a parent, it has to provisioned on the same node and device class as the parent.
+	if parentID != "" {
+		node = parentVol.Spec.NodeName
+		deviceClass = parentVol.Spec.DeviceClass
+	}
+	volumeID, err := s.lvService.CreateVolume(ctx, node, deviceClass, name, parentID, requestGb)
 	if err != nil {
 		_, ok := status.FromError(err)
 		if !ok {
@@ -141,6 +164,7 @@ func (s controllerService) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		Volume: &csi.Volume{
 			CapacityBytes: requestGb << 30,
 			VolumeId:      volumeID,
+			ContentSource: source,
 			AccessibleTopology: []*csi.Topology{
 				{
 					Segments: map[string]string{topolvm.TopologyNodeKey: node},
@@ -148,6 +172,44 @@ func (s controllerService) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			},
 		},
 	}, nil
+}
+
+// validateContentSource checks if the request has a data source and returns source volume information.
+func (s controllerService) validateContentSource(ctx context.Context, req *csi.CreateVolumeRequest) (*v1.LogicalVolume, string, error) {
+	volumeSource := req.VolumeContentSource
+
+	switch volumeSource.Type.(type) {
+	case *csi.VolumeContentSource_Snapshot:
+		snapshotID := req.VolumeContentSource.GetSnapshot().GetSnapshotId()
+		if snapshotID == "" {
+			return nil, "", status.Error(codes.NotFound, "Snapshot ID cannot be empty")
+		}
+		snapshotVol, err := s.lvService.GetVolume(ctx, snapshotID)
+		if err != nil {
+			if errors.Is(err, k8s.ErrVolumeNotFound) {
+				return nil, "", status.Error(codes.NotFound, "failed to find source snapshot")
+			}
+			return nil, "", status.Error(codes.Internal, err.Error())
+		}
+		return snapshotVol, snapshotID, nil
+
+	case *csi.VolumeContentSource_Volume:
+		volumeID := req.VolumeContentSource.GetVolume().GetVolumeId()
+		if volumeID == "" {
+			return nil, "", status.Error(codes.NotFound, "Volume ID cannot be empty")
+		}
+		logicalVol, err := s.lvService.GetVolume(ctx, volumeID)
+		if err != nil {
+			if errors.Is(err, k8s.ErrVolumeNotFound) {
+				return nil, "", status.Error(codes.NotFound, "failed to find source snapshot")
+			}
+			return nil, "", status.Error(codes.Internal, err.Error())
+		}
+
+		return logicalVol, volumeID, nil
+	}
+
+	return nil, "", status.Errorf(codes.InvalidArgument, "not a proper volume source %v", volumeSource)
 }
 
 func convertRequestCapacity(requestBytes, limitBytes int64) (int64, error) {
@@ -278,6 +340,7 @@ func (s controllerService) ControllerGetCapabilities(context.Context, *csi.Contr
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_GET_CAPACITY,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
 	}
 
 	csiCaps := make([]*csi.ControllerServiceCapability, len(capabilities))

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/topolvm/topolvm"
 	v1 "github.com/topolvm/topolvm/api/v1"
 	"github.com/topolvm/topolvm/csi"
@@ -204,6 +206,90 @@ func (s controllerService) validateContentSource(ctx context.Context, req *csi.C
 	}
 
 	return nil, "", status.Errorf(codes.InvalidArgument, "not a proper volume source %v", volumeSource)
+}
+
+// CreateSnapshot creates a logical volume snapshot.
+func (s controllerService) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+	// Since the kubernetes snapshots are Read-Only, we set accessType as 'ro' to activate thin-snapshots as read-only volumes
+	accessType := "ro"
+	// Set snaptype as 'thin' to activate thin-snapshots.
+	// TODO: When adding support for thick-snapshots, set this option as configurable.
+	snapType := "thin"
+
+	ctrlLogger.Info("CreateSnapshot called",
+		"name", req.GetName(),
+		"source_volume_id", req.GetSourceVolumeId(),
+		"parameters", req.GetParameters(),
+		"num_secrets", len(req.GetSecrets()))
+
+	if req.GetSourceVolumeId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing source volume id")
+	}
+
+	if req.GetName() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing name")
+	}
+
+	name := strings.ToLower(req.GetName())
+	sourceVolID := req.GetSourceVolumeId()
+	sourceVol, err := s.lvService.GetVolume(ctx, sourceVolID)
+	if err != nil {
+		if errors.Is(err, k8s.ErrVolumeNotFound) {
+			return nil, status.Error(codes.NotFound, "failed to find source volumes")
+		}
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "failed to find source volumes")
+	}
+	snapTimeStamp := &timestamp.Timestamp{
+		Seconds: time.Now().Unix(),
+		Nanos:   0,
+	}
+	// the snapshots are required to be created in the same node and device class as the source volume.
+	node := sourceVol.Spec.NodeName
+	deviceClass := sourceVol.Spec.DeviceClass
+	snapshotID, err := s.lvService.CreateSnapshot(ctx, node, deviceClass, sourceVolID, name, snapType, accessType, sourceVol)
+	if err != nil {
+		_, ok := status.FromError(err)
+		if !ok {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		return nil, err
+	}
+
+	return &csi.CreateSnapshotResponse{
+		Snapshot: &csi.Snapshot{
+			SnapshotId:     snapshotID,
+			SourceVolumeId: sourceVolID,
+			SizeBytes:      sourceVol.Spec.Size.Value(),
+			CreationTime:   snapTimeStamp,
+			ReadyToUse:     true,
+		},
+	}, nil
+}
+
+// DeleteSnapshot deletes an existing logical volume snapshot.
+func (s controllerService) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+
+	ctrlLogger.Info("DeleteSnapshot called",
+		"snapshot_id", req.GetSnapshotId(),
+		"num_secrets", len(req.GetSecrets()))
+
+	if req.GetSnapshotId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing snapshot id")
+	}
+
+	if err := s.lvService.DeleteVolume(ctx, req.GetSnapshotId()); err != nil {
+		ctrlLogger.Error(err, "DeleteSnapshot failed", "snapshot_id", req.GetSnapshotId())
+		_, ok := status.FromError(err)
+		if !ok {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		return nil, err
+	}
+
+	return &csi.DeleteSnapshotResponse{}, nil
 }
 
 func convertRequestCapacity(requestBytes, limitBytes int64) (int64, error) {

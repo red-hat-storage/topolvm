@@ -18,6 +18,22 @@ type LogicalVolumeSpec struct {
 	NodeName    string            `json:"nodeName"`
 	Size        resource.Quantity `json:"size"`
 	DeviceClass string            `json:"deviceClass,omitempty"`
+
+	// 'type' specifies the logical volume type.
+	// Can be 'thin-snapshot' or left empty in case of a regular volume.
+	// +kubebuilder:validation:Optional
+	Type string `json:"type"`
+
+	// 'sourceID' specifies the volumeID of the parent logical volume; if present.
+	// +kubebuilder:validation:Optional
+	SourceID string `json:"sourceID"`
+
+	//'accessType' specifies how the user intends to consume the snapshot logical volume.
+	// Allowed values are: "ro" (read-only) and "rw" (read-write).
+	// Since the kubernetes snapshots are Read-Only, set accessType as 'ro' to activate thin-snapshots as read-only volumes.
+	// On the other hand, set accessType as 'rw' to activate thin-snapshots as read-write volumes.
+	// +kubebuilder:validation:Optional
+	AccessType string `json:"accessType"`
 }
 
 // LogicalVolumeStatus defines the observed state of LogicalVolume

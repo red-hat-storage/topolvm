@@ -108,25 +108,49 @@ func NewLogicalVolumeService(mgr manager.Manager) (*LogicalVolumeService, error)
 }
 
 // CreateVolume creates volume
-func (s *LogicalVolumeService) CreateVolume(ctx context.Context, node, dc, name string, requestGb int64) (string, error) {
-	logger.Info("k8s.CreateVolume called", "name", name, "node", node, "size_gb", requestGb)
+func (s *LogicalVolumeService) CreateVolume(ctx context.Context, node, dc, name, parentID string, requestGb int64) (string, error) {
+	logger.Info("k8s.CreateVolume called", "name", name, "node", node, "size_gb", requestGb, "parentID", parentID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var lv *topolvmv1.LogicalVolume
+	// if the create volume request has no parent, proceed with regular lv creation.
+	if parentID == "" {
+		lv = &topolvmv1.LogicalVolume{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "LogicalVolume",
+				APIVersion: "topolvm.cybozu.com/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+			},
+			Spec: topolvmv1.LogicalVolumeSpec{
+				Name:        name,
+				NodeName:    node,
+				DeviceClass: dc,
+				Size:        *resource.NewQuantity(requestGb<<30, resource.BinarySI),
+			},
+		}
 
-	lv := &topolvmv1.LogicalVolume{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "LogicalVolume",
-			APIVersion: "topolvm.cybozu.com/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Spec: topolvmv1.LogicalVolumeSpec{
-			Name:        name,
-			NodeName:    node,
-			DeviceClass: dc,
-			Size:        *resource.NewQuantity(requestGb<<30, resource.BinarySI),
-		},
+	} else {
+		// On the other hand, if a volume has a datasource, create a thin snapshot of the parent volume with READ-WRITE access.
+		lv = &topolvmv1.LogicalVolume{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "LogicalVolume",
+				APIVersion: "topolvm.cybozu.com/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+			},
+			Spec: topolvmv1.LogicalVolumeSpec{
+				Name:        name,
+				NodeName:    node,
+				DeviceClass: dc,
+				Size:        *resource.NewQuantity(requestGb<<30, resource.BinarySI),
+				Type:        "thin-snapshot",
+				SourceID:    parentID,
+				AccessType:  "rw",
+			},
+		}
 	}
 
 	existingLV := new(topolvmv1.LogicalVolume)
@@ -140,7 +164,7 @@ func (s *LogicalVolumeService) CreateVolume(ctx context.Context, node, dc, name 
 		if err != nil {
 			return "", err
 		}
-		logger.Info("created LogicalVolume CRD", "name", name)
+		logger.Info("created LogicalVolume CR", "name", name, "sourceID", lv.Spec.SourceID)
 	} else {
 		// LV with same name was found; check compatibility
 		// skip check of capabilities because (1) we allow both of two access types, and (2) we allow only one access mode
@@ -150,34 +174,12 @@ func (s *LogicalVolumeService) CreateVolume(ctx context.Context, node, dc, name 
 		}
 		// compatible LV was found
 	}
-
-	for {
-		logger.Info("waiting for setting 'status.volumeID'", "name", name)
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		case <-time.After(100 * time.Millisecond):
-		}
-
-		var newLV topolvmv1.LogicalVolume
-		err := s.getter.Get(ctx, client.ObjectKey{Name: name}, &newLV)
-		if err != nil {
-			logger.Error(err, "failed to get LogicalVolume", "name", name)
-			return "", err
-		}
-		if newLV.Status.VolumeID != "" {
-			logger.Info("end k8s.LogicalVolume", "volume_id", newLV.Status.VolumeID)
-			return newLV.Status.VolumeID, nil
-		}
-		if newLV.Status.Code != codes.OK {
-			err := s.writer.Delete(ctx, &newLV)
-			if err != nil {
-				// log this error but do not return this error, because newLV.Status.Message is more important
-				logger.Error(err, "failed to delete LogicalVolume")
-			}
-			return "", status.Error(newLV.Status.Code, newLV.Status.Message)
-		}
+	volumeID, err := s.waitForStatusUpdate(ctx, name)
+	if err != nil {
+		return "", err
 	}
+
+	return volumeID, nil
 }
 
 // DeleteVolume deletes volume
@@ -332,5 +334,36 @@ func (s *LogicalVolumeService) UpdateCurrentSize(ctx context.Context, volumeID s
 		}
 
 		return nil
+	}
+}
+
+// waitForStatusUpdate waits for logical volume creation/failure/timeout, whichever comes first.
+func (s *LogicalVolumeService) waitForStatusUpdate(ctx context.Context, name string) (string, error) {
+	for {
+		logger.Info("waiting for setting 'status.volumeID'", "name", name)
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+
+		var newLV topolvmv1.LogicalVolume
+		err := s.getter.Get(ctx, client.ObjectKey{Name: name}, &newLV)
+		if err != nil {
+			logger.Error(err, "failed to get LogicalVolume", "name", name)
+			return "", err
+		}
+		if newLV.Status.VolumeID != "" {
+			logger.Info("end k8s.LogicalVolume", "volume_id", newLV.Status.VolumeID)
+			return newLV.Status.VolumeID, nil
+		}
+		if newLV.Status.Code != codes.OK {
+			err := s.writer.Delete(ctx, &newLV)
+			if err != nil {
+				// log this error but do not return this error, because newLV.Status.Message is more important
+				logger.Error(err, "failed to delete LogicalVolume")
+			}
+			return "", status.Error(newLV.Status.Code, newLV.Status.Message)
+		}
 	}
 }

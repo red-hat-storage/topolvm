@@ -18,6 +18,18 @@ type LogicalVolumeSpec struct {
 	NodeName    string            `json:"nodeName"`
 	Size        resource.Quantity `json:"size"`
 	DeviceClass string            `json:"deviceClass,omitempty"`
+
+	// 'type' specifies the logical volume type.
+	// +kubebuilder:validation:Optional
+	Type string `json:"type"`
+
+	// 'sourceID' specifies the volumeID of the parent logical volume; if present.
+	// +kubebuilder:validation:Optional
+	SourceID string `json:"sourceID"`
+
+	//'accessType' specifies how the user intends to consume the snapshot logical volume.
+	// +kubebuilder:validation:Optional
+	AccessType string `json:"accessType"`
 }
 
 // LogicalVolumeStatus defines the observed state of LogicalVolume

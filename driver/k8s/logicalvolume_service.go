@@ -224,6 +224,53 @@ func (s *LogicalVolumeService) DeleteVolume(ctx context.Context, volumeID string
 	}
 }
 
+// CreateSnapshot creates a snapshot of existing volume.
+func (s *LogicalVolumeService) CreateSnapshot(ctx context.Context, node, dc, sourceVolID, sname, snapType, accessType string, sourceVol *topolvmv1.LogicalVolume) (string, error) {
+	logger.Info("CreateSnapshot called", "name", sname)
+	snapshotLV := &topolvmv1.LogicalVolume{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "LogicalVolume",
+			APIVersion: "topolvm.cybozu.com/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: sname,
+		},
+		Spec: topolvmv1.LogicalVolumeSpec{
+			Name:        sname,
+			NodeName:    node,
+			DeviceClass: dc,
+			Size:        sourceVol.Spec.Size,
+			Type:        snapType,
+			SourceID:    sourceVol.Status.VolumeID,
+			AccessType:  accessType,
+		},
+	}
+
+	existingSnapshot := new(topolvmv1.LogicalVolume)
+	err := s.getter.Get(ctx, client.ObjectKey{Name: sname}, existingSnapshot)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return "", err
+		}
+		err := s.writer.Create(ctx, snapshotLV)
+		if err != nil {
+			return "", err
+		}
+		logger.Info("created LogicalVolume CR", "name", sname, "snapType", snapshotLV.Spec.Type, "sourceID", snapshotLV.Spec.SourceID, "accessType", snapshotLV.Spec.AccessType)
+	} else {
+		if !existingSnapshot.IsCompatibleWith(snapshotLV) || sourceVolID != sourceVol.Status.VolumeID {
+			return "", status.Error(codes.AlreadyExists, "Incompatible LogicalVolume already exists")
+		}
+	}
+
+	volumeID, err := s.waitForStatusUpdate(ctx, sname)
+	if err != nil {
+		return "", err
+	}
+
+	return volumeID, nil
+}
+
 // ExpandVolume expands volume
 func (s *LogicalVolumeService) ExpandVolume(ctx context.Context, volumeID string, requestGb int64) error {
 	logger.Info("k8s.ExpandVolume called", "volumeID", volumeID, "requestGb", requestGb)

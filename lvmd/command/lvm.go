@@ -644,14 +644,30 @@ func (l *LogicalVolume) Snapshot(name string, cowSize uint64) (*LogicalVolume, e
 
 	var lvcreateArgs []string
 	if _, err := os.Stat("/run/systemd/system"); err != nil {
-		lvcreateArgs = []string{"-s", "-n", name, l.fullname}
+		lvcreateArgs = []string{"--type", "thin", "-s", "-n", name, l.fullname}
 	} else {
-		lvcreateArgs = []string{"-s", "-k", "n", "-n", name, l.fullname}
+		lvcreateArgs = []string{"--type", "thin", "-s", "-k", "n", "-n", name, l.fullname}
 	}
 	if err := CallLVM("lvcreate", lvcreateArgs...); err != nil {
 		return nil, err
 	}
 	return l.vg.FindVolume(name)
+}
+
+// Activate activates the logical volume for desired access.
+func (l *LogicalVolume) Activate(access string) error {
+	var lvchangeArgs []string
+	switch access {
+	case "ro":
+		lvchangeArgs = []string{"-p", "r", l.path}
+	case "rw":
+		lvchangeArgs = []string{"-a", "y", l.path}
+	default:
+		return fmt.Errorf("unknown access: %s for LogicalVolume %s", access, l.fullname)
+	}
+	err := CallLVM("lvchange", lvchangeArgs...)
+
+	return err
 }
 
 // Resize this volume.

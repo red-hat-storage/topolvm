@@ -22,7 +22,6 @@ import (
 
 // ErrVolumeNotFound represents the specified volume is not found.
 var ErrVolumeNotFound = errors.New("VolumeID is not found")
-var ErrSnapshotNotFound = errors.New("snapshot not found")
 
 // LogicalVolumeService represents service for LogicalVolume.
 type LogicalVolumeService struct {
@@ -147,7 +146,7 @@ func (s *LogicalVolumeService) CreateVolume(ctx context.Context, node, dc, name,
 				NodeName:    node,
 				DeviceClass: dc,
 				Size:        *resource.NewQuantity(requestGb<<30, resource.BinarySI),
-				Type:        "thin",
+				Type:        "thin-snapshot",
 				SourceID:    parentID,
 				AccessType:  "rw",
 			},
@@ -225,7 +224,7 @@ func (s *LogicalVolumeService) DeleteVolume(ctx context.Context, volumeID string
 }
 
 // CreateSnapshot creates a snapshot of existing volume.
-func (s *LogicalVolumeService) CreateSnapshot(ctx context.Context, node, dc, sourceVolID, sname, snapType, accessType string, sourceVol *topolvmv1.LogicalVolume) (string, error) {
+func (s *LogicalVolumeService) CreateSnapshot(ctx context.Context, node, dc, sourceVolID, sname, snapType, accessType string, snapSize resource.Quantity) (string, error) {
 	logger.Info("CreateSnapshot called", "name", sname)
 	snapshotLV := &topolvmv1.LogicalVolume{
 		TypeMeta: metav1.TypeMeta{
@@ -239,9 +238,9 @@ func (s *LogicalVolumeService) CreateSnapshot(ctx context.Context, node, dc, sou
 			Name:        sname,
 			NodeName:    node,
 			DeviceClass: dc,
-			Size:        sourceVol.Spec.Size,
+			Size:        snapSize,
 			Type:        snapType,
-			SourceID:    sourceVol.Status.VolumeID,
+			SourceID:    sourceVolID,
 			AccessType:  accessType,
 		},
 	}
@@ -258,7 +257,7 @@ func (s *LogicalVolumeService) CreateSnapshot(ctx context.Context, node, dc, sou
 		}
 		logger.Info("created LogicalVolume CR", "name", sname, "snapType", snapshotLV.Spec.Type, "sourceID", snapshotLV.Spec.SourceID, "accessType", snapshotLV.Spec.AccessType)
 	} else {
-		if !existingSnapshot.IsCompatibleWith(snapshotLV) || sourceVolID != sourceVol.Status.VolumeID {
+		if !existingSnapshot.IsCompatibleWith(snapshotLV) {
 			return "", status.Error(codes.AlreadyExists, "Incompatible LogicalVolume already exists")
 		}
 	}

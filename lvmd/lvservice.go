@@ -176,8 +176,8 @@ func (s *lvService) CreateLVSnapshot(_ context.Context, req *proto.CreateLVSnaps
 
 	snapType := req.GetType()
 	switch snapType {
-	case "thin":
-	case "thick":
+	case "thin-snapshot":
+	case "thick-snapshot":
 		return nil, status.Error(codes.Unimplemented, "thick snapshot is not implemented yet")
 	default:
 		return nil, status.Error(codes.InvalidArgument, "snapshot type is not supported")
@@ -186,6 +186,9 @@ func (s *lvService) CreateLVSnapshot(_ context.Context, req *proto.CreateLVSnaps
 	dc, err := s.mapper.DeviceClass(req.DeviceClass)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "%s: %s", err.Error(), req.DeviceClass)
+	}
+	if dc.Type != TypeThin {
+		return nil, status.Error(codes.InvalidArgument, "thin snapshot creation can be done only in thin device classes")
 	}
 	vg, err := command.FindVolumeGroup(dc.VolumeGroup)
 	if err != nil {
@@ -235,7 +238,6 @@ func (s *lvService) CreateLVSnapshot(_ context.Context, req *proto.CreateLVSnaps
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	// If source volume is thin, activate the thin snapshot lv with accessmode.
-	// if sourceLV.IsThin() {
 	if err := snapLV.Activate(req.AccessType); err != nil {
 		log.Error("failed to activate snap volume", map[string]interface{}{
 			log.FnError: err,

@@ -182,7 +182,7 @@ func (s controllerService) validateContentSource(ctx context.Context, req *csi.C
 		}
 		snapshotVol, err := s.lvService.GetVolume(ctx, snapshotID)
 		if err != nil {
-			if errors.Is(err, k8s.ErrSnapshotNotFound) {
+			if errors.Is(err, k8s.ErrVolumeNotFound) {
 				return nil, "", status.Error(codes.NotFound, "failed to find source snapshot")
 			}
 			return nil, "", status.Error(codes.Internal, err.Error())
@@ -213,8 +213,8 @@ func (s controllerService) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 	// Since the kubernetes snapshots are Read-Only, we set accessType as 'ro' to activate thin-snapshots as read-only volumes
 	accessType := "ro"
 	// Set snaptype as 'thin' to activate thin-snapshots.
-	// TODO: When adding support for thick-snapshots, set this option as configurable.
-	snapType := "thin"
+	// TODO (Yuggupta27): When adding support for thick-snapshots, set this option as configurable.
+	snapType := "thin-snapshot"
 
 	ctrlLogger.Info("CreateSnapshot called",
 		"name", req.GetName(),
@@ -239,9 +239,6 @@ func (s controllerService) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 		}
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	if err != nil {
-		return nil, status.Error(codes.NotFound, "failed to find source volumes")
-	}
 	snapTimeStamp := &timestamp.Timestamp{
 		Seconds: time.Now().Unix(),
 		Nanos:   0,
@@ -249,7 +246,8 @@ func (s controllerService) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 	// the snapshots are required to be created in the same node and device class as the source volume.
 	node := sourceVol.Spec.NodeName
 	deviceClass := sourceVol.Spec.DeviceClass
-	snapshotID, err := s.lvService.CreateSnapshot(ctx, node, deviceClass, sourceVolID, name, snapType, accessType, sourceVol)
+	size := sourceVol.Spec.Size
+	snapshotID, err := s.lvService.CreateSnapshot(ctx, node, deviceClass, sourceVolID, name, snapType, accessType, size)
 	if err != nil {
 		_, ok := status.FromError(err)
 		if !ok {

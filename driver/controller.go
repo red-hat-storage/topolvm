@@ -94,6 +94,12 @@ func (s controllerService) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		if err != nil {
 			return nil, err
 		}
+		// check if the child volume has the same size as the parent volume.
+		// TODO (Yuggupta27): Allow user to create a child volume with more size than that of the parent.
+		parentSizeGb := parentVol.Spec.Size.Value() >> 30
+		if parentSizeGb != requestGb {
+			return nil, status.Error(codes.InvalidArgument, "requested size does not match parent volume size")
+		}
 	}
 
 	// process topology

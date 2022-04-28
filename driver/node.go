@@ -211,10 +211,12 @@ func (s *nodeService) nodePublishFilesystemVolume(req *csi.NodePublishVolumeRequ
 		return status.Errorf(codes.Internal, "target device is already formatted with different filesystem: volume=%s, current=%s, new:%s", req.GetVolumeId(), fsType, mountOption.FsType)
 	}
 
-	// avoid duplicate XFS UUIDs
+	// avoid duplicate UUIDs
 	if mountOption.FsType == "xfs" {
 		mountOptions = append(mountOptions, "nouuid")
 		s.mounter.Exec.Command("xfs_admin", "-U", "generate", device)
+	} else if mountOption.FsType == "ext4" {
+		s.mounter.Exec.Command("tune2fs", "-U", "random", device)
 	}
 
 	mounted, err := filesystem.IsMounted(device, req.GetTargetPath())

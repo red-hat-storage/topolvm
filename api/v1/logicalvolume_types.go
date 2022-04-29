@@ -20,6 +20,7 @@ type LogicalVolumeSpec struct {
 	DeviceClass string            `json:"deviceClass,omitempty"`
 
 	// 'type' specifies the logical volume type.
+	// Can be 'thin-snapshot' or left empty in case of a regular volume.
 	// +kubebuilder:validation:Optional
 	Type string `json:"type"`
 
@@ -28,6 +29,9 @@ type LogicalVolumeSpec struct {
 	SourceID string `json:"sourceID"`
 
 	//'accessType' specifies how the user intends to consume the snapshot logical volume.
+	// Allowed values are: "ro" (read-only) and "rw" (read-write).
+	// Since the kubernetes snapshots are Read-Only, set accessType as 'ro' to activate thin-snapshots as read-only volumes.
+	// On the other hand, set accessType as 'rw' to activate thin-snapshots as read-write volumes.
 	// +kubebuilder:validation:Optional
 	AccessType string `json:"accessType"`
 }
@@ -58,6 +62,9 @@ type LogicalVolume struct {
 // IsCompatibleWith returns true if the LogicalVolume is compatible.
 func (lv *LogicalVolume) IsCompatibleWith(lv2 *LogicalVolume) bool {
 	if lv.Spec.Name != lv2.Spec.Name {
+		return false
+	}
+	if lv.Spec.SourceID != lv2.Spec.SourceID {
 		return false
 	}
 	if lv.Spec.Size.Cmp(lv2.Spec.Size) != 0 {

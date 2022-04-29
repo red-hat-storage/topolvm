@@ -94,6 +94,12 @@ func (s controllerService) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		if err != nil {
 			return nil, err
 		}
+		// check if the child volume has the same size as the parent volume.
+		// TODO (Yuggupta27): Allow user to create a child volume with more size than that of the parent.
+		parentSizeGb := parentVol.Spec.Size.Value() >> 30
+		if parentSizeGb != requestGb {
+			return nil, status.Error(codes.InvalidArgument, "requested size does not match parent volume size")
+		}
 	}
 
 	// process topology
@@ -182,7 +188,7 @@ func (s controllerService) validateContentSource(ctx context.Context, req *csi.C
 		}
 		snapshotVol, err := s.lvService.GetVolume(ctx, snapshotID)
 		if err != nil {
-			if errors.Is(err, k8s.ErrSnapshotNotFound) {
+			if errors.Is(err, k8s.ErrVolumeNotFound) {
 				return nil, "", status.Error(codes.NotFound, "failed to find source snapshot")
 			}
 			return nil, "", status.Error(codes.Internal, err.Error())
@@ -213,8 +219,8 @@ func (s controllerService) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 	// Since the kubernetes snapshots are Read-Only, we set accessType as 'ro' to activate thin-snapshots as read-only volumes
 	accessType := "ro"
 	// Set snaptype as 'thin' to activate thin-snapshots.
-	// TODO: When adding support for thick-snapshots, set this option as configurable.
-	snapType := "thin"
+	// TODO (Yuggupta27): When adding support for thick-snapshots, set this option as configurable.
+	snapType := "thin-snapshot"
 
 	ctrlLogger.Info("CreateSnapshot called",
 		"name", req.GetName(),
@@ -239,9 +245,6 @@ func (s controllerService) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 		}
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	if err != nil {
-		return nil, status.Error(codes.NotFound, "failed to find source volumes")
-	}
 	snapTimeStamp := &timestamp.Timestamp{
 		Seconds: time.Now().Unix(),
 		Nanos:   0,
@@ -249,7 +252,8 @@ func (s controllerService) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 	// the snapshots are required to be created in the same node and device class as the source volume.
 	node := sourceVol.Spec.NodeName
 	deviceClass := sourceVol.Spec.DeviceClass
-	snapshotID, err := s.lvService.CreateSnapshot(ctx, node, deviceClass, sourceVolID, name, snapType, accessType, sourceVol)
+	size := sourceVol.Spec.Size
+	snapshotID, err := s.lvService.CreateSnapshot(ctx, node, deviceClass, sourceVolID, name, snapType, accessType, size)
 	if err != nil {
 		_, ok := status.FromError(err)
 		if !ok {

@@ -659,9 +659,9 @@ func (l *LogicalVolume) Activate(access string) error {
 	var lvchangeArgs []string
 	switch access {
 	case "ro":
-		lvchangeArgs = []string{"-p", "r", l.path}
+		lvchangeArgs = []string{"-p", "r", "-K", l.path}
 	case "rw":
-		lvchangeArgs = []string{"-a", "y", l.path}
+		lvchangeArgs = []string{"-a", "y", "-K", l.path}
 	default:
 		return fmt.Errorf("unknown access: %s for LogicalVolume %s", access, l.fullname)
 	}

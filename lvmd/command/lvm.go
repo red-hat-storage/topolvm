@@ -644,9 +644,9 @@ func (l *LogicalVolume) Snapshot(name string, cowSize uint64) (*LogicalVolume, e
 
 	var lvcreateArgs []string
 	if _, err := os.Stat("/run/systemd/system"); err != nil {
-		lvcreateArgs = []string{"--type", "thin", "-s", "-n", name, l.fullname}
+		lvcreateArgs = []string{"-s", "-n", name, l.fullname}
 	} else {
-		lvcreateArgs = []string{"--type", "thin", "-s", "-k", "n", "-n", name, l.fullname}
+		lvcreateArgs = []string{"-s", "-k", "n", "-n", name, l.fullname}
 	}
 	if err := CallLVM("lvcreate", lvcreateArgs...); err != nil {
 		return nil, err

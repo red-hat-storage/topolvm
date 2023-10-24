@@ -1,5 +1,5 @@
 # Build Container
-FROM golang:1.18-buster AS build-env
+FROM golang:1.20-bullseye AS build-env
 
 # Get argment
 ARG TOPOLVM_VERSION

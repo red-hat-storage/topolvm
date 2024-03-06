@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 
+	"github.com/topolvm/topolvm"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -21,6 +22,10 @@ var Containerized bool = false
 
 // ErrNotFound is returned when a VG or LV is not found.
 var ErrNotFound = errors.New("not found")
+
+// ErrNoMultipleOfSectorSize is returned when a volume is requested that is smaller than the minimum sector size.
+var ErrNoMultipleOfSectorSize = fmt.Errorf("cannot create volume as given size "+
+	"is not a multiple of %d and could get rejected", topolvm.MinimumSectorSize)
 
 // wrapExecCommand calls cmd with args but wrapped to run
 // on the host
@@ -210,6 +215,11 @@ func (g *VolumeGroup) ListVolumes() []*LogicalVolume {
 // lvcreateOptions are additional arguments to pass to lvcreate.
 func (g *VolumeGroup) CreateVolume(ctx context.Context, name string, size uint64, tags []string, stripe uint, stripeSize string,
 	lvcreateOptions []string) (*LogicalVolume, error) {
+
+	if size%uint64(topolvm.MinimumSectorSize) != 0 {
+		return nil, ErrNoMultipleOfSectorSize
+	}
+
 	lvcreateArgs := []string{"-n", name, "-L", fmt.Sprintf("%vb", size), "-W", "y", "-y"}
 	for _, tag := range tags {
 		lvcreateArgs = append(lvcreateArgs, "--addtag")
@@ -318,6 +328,11 @@ func (t *ThinPool) Resize(ctx context.Context, newSize uint64) error {
 	if t.state.size == newSize {
 		return nil
 	}
+
+	if newSize%uint64(topolvm.MinimumSectorSize) != 0 {
+		return ErrNoMultipleOfSectorSize
+	}
+
 	if err := callLVM(ctx, "lvresize", "-f", "-L", fmt.Sprintf("%vb", newSize), t.state.fullName); err != nil {
 		return err
 	}

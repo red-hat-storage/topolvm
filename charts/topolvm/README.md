@@ -7,7 +7,7 @@
 
 ## Installation
 
-See [Getting Started](https://github.com/topolvm/topolvm/blob/topolvm-chart-v15.1.1/docs/getting-started.md).
+See [Getting Started](https://github.com/topolvm/topolvm/blob/topolvm-chart-v15.3.0/docs/getting-started.md).
 
 ## Values
 
@@ -72,10 +72,19 @@ See [Getting Started](https://github.com/topolvm/topolvm/blob/topolvm-chart-v15.
 | lvmd.labels | object | `{}` | Additional labels to be added to the Daemonset. |
 | lvmd.lvcreateOptionClasses | list | `[]` | Specify the lvcreate-option-class settings. |
 | lvmd.managed | bool | `true` | If true, set up lvmd service with DaemonSet. |
+| lvmd.metrics.annotations | object | `{"prometheus.io/port":"metrics"}` | Annotations for Scrape used by Prometheus. |
+| lvmd.metrics.enabled | bool | `true` | If true, enable scraping of metrics by Prometheus. |
 | lvmd.nodeSelector | object | `{}` | Specify nodeSelector. # ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/ |
 | lvmd.podLabels | object | `{}` | Additional labels to be set on the lvmd service pods. |
 | lvmd.priorityClassName | string | `nil` | Specify priorityClassName. |
 | lvmd.profiling.bindAddress | string | `""` | Enables pprof profiling server. If empty, profiling is disabled. |
+| lvmd.prometheus.podMonitor.additionalLabels | object | `{}` | Additional labels that can be used so PodMonitor will be discovered by Prometheus. |
+| lvmd.prometheus.podMonitor.enabled | bool | `false` | Set this to `true` to create PodMonitor for Prometheus operator. |
+| lvmd.prometheus.podMonitor.interval | string | `""` | Scrape interval. If not set, the Prometheus default scrape interval is used. |
+| lvmd.prometheus.podMonitor.metricRelabelings | list | `[]` | MetricRelabelConfigs to apply to samples before ingestion. |
+| lvmd.prometheus.podMonitor.namespace | string | `""` | Optional namespace in which to create PodMonitor. |
+| lvmd.prometheus.podMonitor.relabelings | list | `[]` | RelabelConfigs to apply to samples before scraping. |
+| lvmd.prometheus.podMonitor.scrapeTimeout | string | `""` | Scrape timeout. If not set, the Prometheus default scrape timeout is used. |
 | lvmd.socketName | string | `"/run/topolvm/lvmd.sock"` | Specify socketName. |
 | lvmd.tolerations | list | `[]` | Specify tolerations. # ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/ |
 | lvmd.updateStrategy | object | `{}` | Specify updateStrategy. |
@@ -148,7 +157,9 @@ See [Getting Started](https://github.com/topolvm/topolvm/blob/topolvm-chart-v15.
 | webhook.caBundle | string | `nil` | Specify the certificate to be used for AdmissionWebhook. |
 | webhook.existingCertManagerIssuer | object | `{}` | Specify the cert-manager issuer to be used for AdmissionWebhook. |
 | webhook.podMutatingWebhook.enabled | bool | `false` | Enable Pod MutatingWebhook. |
+| webhook.podMutatingWebhook.objectSelector | object | `{}` | Labels required on Pods for webhook action. **WARNING**: Modifying objectSelector can affect TopoLVM Pod scheduling. Proceed with caution. # ref: https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#matching-requests-objectselector |
 | webhook.pvcMutatingWebhook.enabled | bool | `true` | Enable PVC MutatingWebhook. |
+| webhook.pvcMutatingWebhook.objectSelector | object | `{}` | Labels required on PVCs for webhook action. **WARNING**: Modifying objectSelector can affect TopoLVM PVC management. Proceed with caution. # ref: https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#matching-requests-objectselector |
 
 ## Generate Manifests
 

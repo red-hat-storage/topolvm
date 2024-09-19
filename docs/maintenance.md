@@ -17,15 +17,13 @@ The format is up to you, but this is very important to keep track of what change
 Basically, we should pay attention to breaking changes and security fixes first.
 If we find some interesting features added in new versions, please consider if we are going to use them or not and make a GitHub issue to incorporate them after the upgrading task is done.
 
-Note: Ubuntu 18.04 is used to keep the backward compatibility of XFS formatting. (https://github.com/topolvm/topolvm/pull/306)
-
 #### Kubernetes
 
 Choose the next version and check the [release note](https://kubernetes.io/docs/setup/release/notes/). e.g. 1.17, 1.18, 1.19 -> 1.18, 1.19, 1.20
 
 Edit the following files.
+- `docs/advanced-setup.md`
 - `README.md`
-- `deploy/README.md`
 - `versions.mk`
 - `.github/workflows/e2e-k8s-incluster-lvmd.yaml`
 - `.github/workflows/e2e-k8s-workflow.yaml`
@@ -97,6 +95,8 @@ For example, see https://github.com/kubernetes-csi/external-provisioner/blob/mas
 - `charts/topolvm/templates/controller/clusterroles.yaml`
 - `charts/topolvm/templates/controller/roles.yaml`
 
+If the `external-snapshotter` sidecar is updated, you also update `go.mod` and source code accordingly.
+
 #### Depending Tools
 
 The depending tools versions are specified in `versions.mk`.
@@ -111,9 +111,6 @@ The following tools depend on kubernetes, use appropriate version associating to
 
 - [kind](https://github.com/kubernetes-sigs/kind/releases)
 - [minikube](https://github.com/kubernetes/minikube/releases)
-
-In `.github/workflows/e2e-k8s-incluster-lvmd.yaml`, minikube depends on some other tools,
-so please check if these tools are also needed to be upgraded.
 
 #### Depending Modules
 

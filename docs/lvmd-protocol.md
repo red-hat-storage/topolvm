@@ -3,7 +3,7 @@
 
 ## Table of Contents
 
-- [lvmd/proto/lvmd.proto](#lvmd/proto/lvmd.proto)
+- [pkg/lvmd/proto/lvmd.proto](#pkg/lvmd/proto/lvmd.proto)
     - [CreateLVRequest](#proto.CreateLVRequest)
     - [CreateLVResponse](#proto.CreateLVResponse)
     - [CreateLVSnapshotRequest](#proto.CreateLVSnapshotRequest)
@@ -27,10 +27,10 @@
 
 
 
-<a name="lvmd/proto/lvmd.proto"></a>
+<a name="pkg/lvmd/proto/lvmd.proto"></a>
 <p align="right"><a href="#top">Top</a></p>
 
-## lvmd/proto/lvmd.proto
+## pkg/lvmd/proto/lvmd.proto
 LVMd manages logical volumes of an LVM volume group.
 
 The protocol consists of two services:
@@ -193,6 +193,8 @@ Represents a logical volume.
 | dev_minor | [uint32](#uint32) |  | Device minor number. |
 | tags | [string](#string) | repeated | Tags to add to the volume during creation |
 | size_bytes | [int64](#int64) |  | Volume size in canonical CSI bytes. |
+| path | [string](#string) |  | Path to the lv as per lvm. |
+| attr | [string](#string) |  | Attributes of the lv. |
 
 
 

@@ -12,7 +12,6 @@ This document describes how to install TopoLVM with advanced configurations.
   - [Run LVMd as a Systemd Service](#run-lvmd-as-a-systemd-service)
   - [Migrate LVMd, which is running as a systemd service, to DaemonSet](#migrate-lvmd-which-is-running-as-a-systemd-service-to-daemonset)
 - [Certificates](#certificates)
-- [Snapshot](#snapshot)
 - [Scheduling](#scheduling)
   - [Using Storage Capacity Tracking](#using-storage-capacity-tracking)
   - [Using topolvm-scheduler](#using-topolvm-scheduler)
@@ -21,7 +20,7 @@ This document describes how to install TopoLVM with advanced configurations.
 
 You can configure the StorageClass created by the Helm Chart by editing the Helm Chart values.
 
-`fsType` specifies the filesystem type of the volume. Supported filesystems are `ext4`, `xfs` and `btrfs`(experimental).
+`fsType` specifies the filesystem type of the volume. Supported filesystems are `ext4`, `xfs` and `btrfs`(beta).
 
 `volumeBindingMode` can be either `WaitForFirstConsumer` or `Immediate`.
 `WaitForFirstConsumer` is recommended because TopoLVM cannot schedule pods
@@ -32,6 +31,9 @@ wisely if `volumeBindingMode` is `Immediate`.
 `additionalParameters` defines additional parameters for the StorageClass.
 You can use it to set `device-class` that the StorageClass will use.
 The `device-class` is described in the [LVMd](lvmd.md) document.
+
+`reclaimPolicy` can be either `Delete` or `Retain`.
+If you delete a PVC whose corresponding PV has `Retain` reclaim policy, the corresponding `LogicalVolume` resource and the LVM logical volume are *NOT* deleted. If you delete this `LogicalVolume` resource after deleting the PVC, the related LVM logical volume is also deleted.
 
 ## Pod Priority
 
@@ -193,35 +195,6 @@ If you don't want to use cert-manager, you can use your own certificates as foll
    <snip>
    ```
 
-## Snapshot
-
-To create VolumeSnapshots, please follow [snapshot controller deployment](https://github.com/kubernetes-csi/external-snapshotter#usage) to install snapshot controller. Do this once per cluster.
-Refer to the [kubernetes guide](https://kubernetes.io/docs/concepts/storage/volume-snapshots/) for VolumeSnapshot creation.
-
-`VolumeSnapshotClass` example:
-
-```yaml
-apiVersion: snapshot.storage.k8s.io/v1
-kind: VolumeSnapshotClass
-metadata:
-  name: csi-topolvm-snapclass
-driver: topolvm.io
-deletionPolicy: Delete
-```
-
-`VolumeSnapshot` example:
-
-```yaml
-apiVersion: snapshot.storage.k8s.io/v1
-kind: VolumeSnapshot
-metadata:
-  name: new-snapshot
-spec:
-  volumeSnapshotClassName: csi-topolvm-snapclass
-  source:
-    persistentVolumeClaimName: snapshot-pvc
-```
-
 ## Scheduling
 
 It is necessary to configure `kube-scheduler` to schedule pods to appropriate nodes which have sufficient capacity to create volumes because TopoLVM provides node local volumes.
@@ -276,7 +249,7 @@ apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
 metadata:
   name: config
-kubernetesVersion: v1.27.3
+kubernetesVersion: v1.30.2
 scheduler:
   extraVolumes:
     - name: "config"
@@ -328,7 +301,7 @@ Almost all scoring algorithms in `kube-scheduler` are weighted as `"weight": 1`.
 So if you want to give a priority to the scoring by `topolvm-scheduler`, you have to set the weight as a value larger than one like as follows:
 
 ```yaml
-apiVersion: kubescheduler.config.k8s.io/v1beta3
+apiVersion: kubescheduler.config.k8s.io/v1
 kind: KubeSchedulerConfiguration
 ...
 extenders:

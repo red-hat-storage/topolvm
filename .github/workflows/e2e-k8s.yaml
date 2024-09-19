@@ -13,7 +13,7 @@ on:
 
 jobs:
   build:
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-22.04"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -21,31 +21,22 @@ jobs:
           go-version-file: "go.mod"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: cache go dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-${{ hashFiles('go.sum', 'Makefile', 'versions.mk') }}
-          restore-keys: |
-            go-
       - name: cache e2e sidecar binaries
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
-            e2e/tmpbin
+            test/e2e/tmpbin
           key: e2e-sidecars-${{ hashFiles('csi-sidecars.mk', 'versions.mk') }}
           restore-keys: |
             e2e-sidecars-
-      - run: make -C e2e setup
-      - run: make -C e2e topolvm.img
-      - uses: actions/cache/save@v3
+      - run: make -C test/e2e setup
+      - run: make -C test/e2e topolvm.img
+      - uses: actions/cache/save@v4
         with:
           path: |
             bin
-            e2e/bin
-            e2e/topolvm.img
+            test/e2e/bin
+            test/e2e/topolvm.img
           key: e2e-cache-${{ github.sha }}
 
   default:

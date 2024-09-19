@@ -76,6 +76,9 @@ const PVCFinalizer = pluginName + "/pvc"
 // LegacyPVCFinalizer is a legacy finalizer of PVC.
 const LegacyPVCFinalizer = legacyPluginName + "/pvc"
 
+// LastResizeFSRequestedAtKey is the annotation key that represents the timestamp of the resizefs request to kubelet.
+const LastResizeFSRequestedAtKey = pluginName + "/last-resizefs-requested-at"
+
 // DefaultCSISocket is the default path of the CSI socket file.
 const DefaultCSISocket = "/run/topolvm/csi-topolvm.sock"
 
@@ -94,9 +97,19 @@ const DefaultSizeGb = 1
 // DefaultSize is DefaultSizeGb in bytes
 const DefaultSize = int64(DefaultSizeGb << 30)
 
+// MinimumSectorSize is the minimum size in bytes for volumes (PVC or generic ephemeral volumes).
+// It is derived from the usual sector size of 512,1024 or 4096 bytes for logical volumes.
+// While Sector Sizes of 512 are common, using 4096 is safe
+// As it also aligns with 512 and 1024 byte sectors, and is the default for most modern disks.
+// Going lower than this size will cause validation issues on volume creation for the user.
+const MinimumSectorSize = int64(4096)
+
 // Label key that indicates The controller/user who created this resource
 // https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/#labels
 const CreatedbyLabelKey = "app.kubernetes.io/created-by"
 
 // Label value that indicates The controller/user who created this resource
 const CreatedbyLabelValue = "topolvm-controller"
+
+// LegacyDeviceDirectory is a directory where TopoLVM Node service creates device files.
+const LegacyDeviceDirectory = "/dev/topolvm"

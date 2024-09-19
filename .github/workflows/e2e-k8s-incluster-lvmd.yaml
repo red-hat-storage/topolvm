@@ -13,11 +13,11 @@ on:
 jobs:
   e2e-k8s-incluster-lvmd:
     name: "e2e-k8s-incluster-lvmd"
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-22.04"
     strategy:
       fail-fast: false
       matrix:
-        kubernetes_versions: ["1.27.3", "1.26.6", "1.25.11"]
+        kubernetes_versions: ["1.30.0", "1.29.4", "1.28.9"]
         test_lvmd_type: ["daemonset", "embedded"]
     env:
       KUBERNETES_VERSION: ${{ matrix.kubernetes_versions }}
@@ -30,24 +30,15 @@ jobs:
           go-version-file: "go.mod"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: cache go dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-${{ hashFiles('go.sum', 'Makefile', 'versions.mk') }}
-          restore-keys: |
-            go-
       - name: cache e2e sidecar binaries
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
-            e2e/tmpbin
+            test/e2e/tmpbin
           key: e2e-sidecars-${{ hashFiles('csi-sidecars.mk', 'versions.mk') }}
           restore-keys: |
             e2e-sidecars-
-      - run: make -C e2e incluster-lvmd/create-vg
-      - run: make -C e2e incluster-lvmd/setup-minikube
-      - run: make -C e2e incluster-lvmd/launch-minikube
-      - run: make -C e2e incluster-lvmd/test
+      - run: make -C test/e2e incluster-lvmd/create-vg
+      - run: make -C test/e2e incluster-lvmd/setup-minikube
+      - run: make -C test/e2e incluster-lvmd/launch-minikube
+      - run: make -C test/e2e incluster-lvmd/test

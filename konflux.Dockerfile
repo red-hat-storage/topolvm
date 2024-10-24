@@ -24,7 +24,7 @@ RUN dnf update -y && \
     dnf install -y util-linux xfsprogs e2fsprogs && \
     dnf clean all
 
-RUN subscription-manager register --org $(cat "/activation-key/org") --activationkey $(cat "/activation-key/activationkey")
+RUN subscription-manager unregister
 
 COPY --from=builder /workdir/build/hypertopolvm /hypertopolvm
 COPY --from=builder /go.version /go.version

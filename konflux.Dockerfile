@@ -17,8 +17,7 @@ RUN go build -tags strictfipsruntime -o build/hypertopolvm -mod=mod -ldflags "-w
 # Build Stage 2
 FROM registry.redhat.io/rhel9-4-els/rhel:9.4
 
-RUN ls /
-RUN ls /activation-key
+RUN mv /etc/pki/entitlement/redhat-uep.pem /etc/rhsm/ca/redhat-uep.pem
 
 # Update the image to get the latest CVE updates
 RUN microdnf update -y && \

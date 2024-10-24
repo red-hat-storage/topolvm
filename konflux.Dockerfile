@@ -17,7 +17,7 @@ RUN go build -tags strictfipsruntime -o build/hypertopolvm -mod=mod -ldflags "-w
 # Build Stage 2
 FROM registry.redhat.io/rhel9-4-els/rhel:9.4
 
-RUN ls /etc/pki/entitlement
+RUN ls /
 RUN ls /activation-key
 
 # Update the image to get the latest CVE updates

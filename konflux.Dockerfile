@@ -20,9 +20,9 @@ FROM registry.redhat.io/rhel9-4-els/rhel:9.4
 RUN mv /etc/pki/entitlement/redhat-uep.pem /etc/rhsm/ca/redhat-uep.pem
 
 # Update the image to get the latest CVE updates
-RUN microdnf update -y && \
-    microdnf install -y util-linux xfsprogs e2fsprogs && \
-    microdnf clean all
+RUN dnf update -y && \
+    dnf install -y util-linux xfsprogs e2fsprogs && \
+    dnf clean all
 
 COPY --from=builder /workdir/build/hypertopolvm /hypertopolvm
 COPY --from=builder /go.version /go.version

@@ -15,9 +15,10 @@ ENV GOEXPERIMENT=strictfipsruntime
 RUN go build -tags strictfipsruntime -o build/hypertopolvm -mod=mod -ldflags "-w -s -X github.com/topolvm/topolvm.Version=${TOPOLVM_VERSION}" ./cmd/hypertopolvm
 
 # Build Stage 2
-FROM registry.redhat.io/rhel9-4-els/rhel-minimal:9.4
+FROM registry.redhat.io/rhel9-4-els/rhel:9.4
 
 RUN ls /etc/pki/entitlement
+RUN ls /activation-key
 
 # Update the image to get the latest CVE updates
 RUN microdnf update -y && \

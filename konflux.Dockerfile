@@ -17,12 +17,14 @@ RUN go build -tags strictfipsruntime -o build/hypertopolvm -mod=mod -ldflags "-w
 # Build Stage 2
 FROM registry.redhat.io/rhel9-4-els/rhel:9.4
 
-RUN mv /etc/pki/entitlement/redhat-uep.pem /etc/rhsm/ca/redhat-uep.pem
+RUN subscription-manager register --org $(cat "/activation-key/org") --activationkey $(cat "/activation-key/activationkey")
 
 # Update the image to get the latest CVE updates
 RUN dnf update -y && \
     dnf install -y util-linux xfsprogs e2fsprogs && \
     dnf clean all
+
+RUN subscription-manager register --org $(cat "/activation-key/org") --activationkey $(cat "/activation-key/activationkey")
 
 COPY --from=builder /workdir/build/hypertopolvm /hypertopolvm
 COPY --from=builder /go.version /go.version

@@ -3,7 +3,6 @@ package lvmd
 import (
 	"context"
 	"math"
-	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -258,7 +257,6 @@ func testVGService(t *testing.T, vg *command.VolumeGroup) {
 	if vol.GetName() != "testp1" {
 		t.Errorf(`Volume.Name != "test1": %s`, vol.GetName())
 	}
-	//lint:ignore SA1019 gRPC API has two fields for Gb and Bytes, both are valid
 	if sizeGB := vol.GetSizeGb(); sizeGB != 1 {
 		t.Errorf(`Volume.SizeGb != 1: %d`, sizeGB)
 	}
@@ -422,10 +420,7 @@ func testVGService(t *testing.T, vg *command.VolumeGroup) {
 
 func TestVGService(t *testing.T) {
 	ctx := ctrl.LoggerInto(context.Background(), testr.New(t))
-	uid := os.Getuid()
-	if uid != 0 {
-		t.Skip("run as root")
-	}
+	testutils.RequireRoot(t)
 
 	vgName := "test_vgservice"
 	loop1, err := testutils.MakeLoopbackDevice(ctx, vgName+"1")

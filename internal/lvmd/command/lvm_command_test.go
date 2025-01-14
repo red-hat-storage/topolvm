@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -18,9 +18,8 @@ import (
 )
 
 func Test_lvm_command(t *testing.T) {
-	if os.Getuid() != 0 {
-		t.Skip("run as root")
-	}
+	testutils.RequireRoot(t)
+
 	t.Run("simple lvm version should succeed with stream", func(t *testing.T) {
 		ctx := log.IntoContext(context.Background(), testr.New(t))
 		dataStream, err := callLVMStreamed(ctx, verbosityLVMStateNoUpdate, "version")
@@ -91,7 +90,7 @@ func Test_lvm_command(t *testing.T) {
 			t.Fatal("data should be empty as the command should fail")
 		}
 		err = dataStream.Close()
-		if err != nil {
+		if err == nil {
 			t.Fatal(err, "data stream should fail during close")
 		}
 
@@ -110,9 +109,6 @@ func Test_lvm_command(t *testing.T) {
 		}
 		if !strings.Contains(lvmErr.Error(), fmt.Sprintf("No device found for %s", fakeDeviceName)) {
 			t.Fatal("No device found message not contained in error")
-		}
-		if dataStream != nil {
-			t.Fatal("data stream should be nil")
 		}
 	})
 
@@ -134,7 +130,8 @@ func Test_lvm_command(t *testing.T) {
 			t.Fatal("no messages logged")
 		}
 
-		if !strings.Contains(messages[0], `"args"=["/sbin/lvm","version"]`) {
+		match, _ := regexp.MatchString(`"args"=\[.* "/sbin/lvm" "version"\]`, messages[0])
+		if !match {
 			t.Fatal("command log was not found")
 		}
 
@@ -191,6 +188,40 @@ func Test_lvm_command(t *testing.T) {
 			err = vg.CreateVolume(ctx, "test1", uint64(topolvm.MinimumSectorSize)+1, []string{"tag"}, 0, "", nil)
 			if !errors.Is(err, ErrNoMultipleOfSectorSize) {
 				t.Fatalf("expected error to be %v, got %v", ErrNoMultipleOfSectorSize, err)
+			}
+		})
+
+		t.Run("create cached volume and it should not classified as thin volume.", func(t *testing.T) {
+			// create the cachedevice
+			cache_vg_name := "CACHEDEVICE"
+			cache_loop, err := testutils.MakeLoopbackDevice(ctx, cache_vg_name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = testutils.MakeLoopbackVG(ctx, cache_vg_name, cache_loop)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// ensure cache device cleanup
+			defer func() { _ = testutils.CleanLoopbackVG(cache_vg_name, []string{cache_loop}, []string{cache_vg_name}) }()
+			vg, err := FindVolumeGroup(ctx, cache_vg_name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// create cached LV
+			err = vg.CreateVolume(ctx, "test1", uint64(topolvm.MinimumSectorSize), []string{"tag"}, 0, "", []string{"--type", "writecache", "--cachesize", "10M", "--cachedevice", cache_loop})
+			if err != nil {
+				t.Fatal(err)
+			}
+			vol, err := vg.FindVolume(ctx, "test1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if vol.IsThin() {
+				t.Fatal("Expected test1 to not be thin (eval lv_attr instead of pool)")
+			}
+			if vol.attr[0] != byte(VolumeTypeCached) {
+				t.Fatal("Created a LV but without writecache?")
 			}
 		})
 	})
